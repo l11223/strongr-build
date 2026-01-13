@@ -171,24 +171,76 @@ jobs:
     - name: Package artifacts
       run: |
         cd frida
-        # 查找编译产物
-        FRIDA_SERVER=$(find . -name "frida-server" -type f | grep -v ".git" | head -1)
-        FRIDA_INJECT=$(find . -name "frida-inject" -type f | grep -v ".git" | head -1)
-        FRIDA_GADGET=$(find . -name "frida-gadget.so" -type f | grep -v ".git" | head -1)
         
-        if [ -n "$FRIDA_SERVER" ]; then
+        # 查找编译产物（Frida 17.5.2 的路径结构）
+        echo "Searching for build artifacts..."
+        
+        # 尝试多个可能的路径
+        FRIDA_SERVER=""
+        FRIDA_INJECT=""
+        FRIDA_GADGET=""
+        
+        # 路径1: build/frida-android-arm64/bin/
+        if [ -f "build/frida-android-arm64/bin/frida-server" ]; then
+          FRIDA_SERVER="build/frida-android-arm64/bin/frida-server"
+        elif [ -f "build/subprojects/frida-core/server/frida-server" ]; then
+          FRIDA_SERVER="build/subprojects/frida-core/server/frida-server"
+        else
+          # 使用 find 查找
+          FRIDA_SERVER=$(find . -path "*/frida-server" -type f ! -path "*/.git/*" ! -path "*/build/tmp/*" | head -1)
+        fi
+        
+        if [ -f "build/frida-android-arm64/bin/frida-inject" ]; then
+          FRIDA_INJECT="build/frida-android-arm64/bin/frida-inject"
+        elif [ -f "build/subprojects/frida-core/inject/frida-inject" ]; then
+          FRIDA_INJECT="build/subprojects/frida-core/inject/frida-inject"
+        else
+          FRIDA_INJECT=$(find . -path "*/frida-inject" -type f ! -path "*/.git/*" ! -path "*/build/tmp/*" | head -1)
+        fi
+        
+        if [ -f "build/frida-android-arm64/lib/frida/64/frida-gadget.so" ]; then
+          FRIDA_GADGET="build/frida-android-arm64/lib/frida/64/frida-gadget.so"
+        elif [ -f "build/subprojects/frida-core/lib/gadget/frida-gadget.so" ]; then
+          FRIDA_GADGET="build/subprojects/frida-core/lib/gadget/frida-gadget.so"
+        else
+          FRIDA_GADGET=$(find . -path "*/frida-gadget.so" -type f ! -path "*/.git/*" ! -path "*/build/tmp/*" | head -1)
+        fi
+        
+        # 显示找到的文件
+        echo "Found files:"
+        echo "  FRIDA_SERVER: $FRIDA_SERVER"
+        echo "  FRIDA_INJECT: $FRIDA_INJECT"
+        echo "  FRIDA_GADGET: $FRIDA_GADGET"
+        
+        # 验证文件存在并压缩
+        if [ -n "$FRIDA_SERVER" ] && [ -f "$FRIDA_SERVER" ]; then
+          echo "Compressing frida-server..."
           gzip -f "$FRIDA_SERVER"
-          echo "FRIDA_SERVER_PATH=${FRIDA_SERVER}.gz" >> $GITHUB_ENV
+          # 使用相对于工作区根目录的路径
+          echo "FRIDA_SERVER_PATH=frida/${FRIDA_SERVER}.gz" >> $GITHUB_ENV
+          echo "✅ frida-server compressed: frida/${FRIDA_SERVER}.gz"
+        else
+          echo "❌ frida-server not found"
+          ls -la build/frida-android-arm64/bin/ 2>/dev/null || true
+          ls -la build/subprojects/frida-core/server/ 2>/dev/null || true
         fi
         
-        if [ -n "$FRIDA_INJECT" ]; then
+        if [ -n "$FRIDA_INJECT" ] && [ -f "$FRIDA_INJECT" ]; then
+          echo "Compressing frida-inject..."
           gzip -f "$FRIDA_INJECT"
-          echo "FRIDA_INJECT_PATH=${FRIDA_INJECT}.gz" >> $GITHUB_ENV
+          echo "FRIDA_INJECT_PATH=frida/${FRIDA_INJECT}.gz" >> $GITHUB_ENV
+          echo "✅ frida-inject compressed: frida/${FRIDA_INJECT}.gz"
+        else
+          echo "❌ frida-inject not found"
         fi
         
-        if [ -n "$FRIDA_GADGET" ]; then
+        if [ -n "$FRIDA_GADGET" ] && [ -f "$FRIDA_GADGET" ]; then
+          echo "Compressing frida-gadget..."
           gzip -f "$FRIDA_GADGET"
-          echo "FRIDA_GADGET_PATH=${FRIDA_GADGET}.gz" >> $GITHUB_ENV
+          echo "FRIDA_GADGET_PATH=frida/${FRIDA_GADGET}.gz" >> $GITHUB_ENV
+          echo "✅ frida-gadget compressed: frida/${FRIDA_GADGET}.gz"
+        else
+          echo "❌ frida-gadget not found"
         fi
         
     - name: Upload frida-server
